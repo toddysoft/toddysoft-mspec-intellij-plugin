@@ -3,6 +3,9 @@ package com.toddysoft.mspec;
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.Annotator;
 import com.intellij.lang.annotation.HighlightSeverity;
+import com.intellij.openapi.editor.colors.EditorColorsManager;
+import com.intellij.openapi.editor.colors.TextAttributesKey;
+import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
@@ -22,6 +25,11 @@ public class MSpecAnnotator implements Annotator {
         "bit", "byte", "int", "uint", "vint", "vuint",
         "float", "ufloat", "string", "vstring",
         "time", "date", "dateTime"
+    ));
+
+    // Array loop type keywords
+    private static final Set<String> ARRAY_LOOP_TYPES = new HashSet<>(Arrays.asList(
+        "count", "length", "terminated"
     ));
 
     // Primitive types that require size parameters
@@ -77,6 +85,40 @@ public class MSpecAnnotator implements Annotator {
      */
     private void validateInContext(PsiElement element, String text, String beforeContext,
                                    String afterContext, PsiFile file, AnnotationHolder holder) {
+
+        // Check if this is an array loop type in the correct position
+        // Pattern: [array typeRef fieldName <loopType>
+        // or: [manualArray typeRef fieldName <loopType>
+        if (ARRAY_LOOP_TYPES.contains(text.toLowerCase())) {
+            System.out.println("DEBUG: Found array loop type candidate: '" + text + "'");
+            System.out.println("DEBUG: Before context: '" + beforeContext + "'");
+
+            // Check if it's in the loop type position
+            // Match: [array/manualArray typeRef fieldName whitespace (but don't require end of string)
+            // Use [\\s\\S]* instead of .* to match newlines as well
+            if (beforeContext.matches("[\\s\\S]*\\[\\s*(?:array|manualArray)\\s+\\S+\\s+\\S+\\s+[\\s\\S]*")) {
+                System.out.println("DEBUG: MATCH! This is a loop type in the correct position");
+
+                // This is a loop type keyword in the correct position
+                // Get the keyword text attributes from the current color scheme
+                TextAttributes keywordAttrs = EditorColorsManager.getInstance().getGlobalScheme()
+                        .getAttributes(com.intellij.openapi.editor.DefaultLanguageHighlighterColors.KEYWORD);
+
+                System.out.println("DEBUG: Keyword attrs: " + keywordAttrs);
+
+                // Use enforcedTextAttributes to override base highlighting
+                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                        .range(element.getTextRange())
+                        .enforcedTextAttributes(keywordAttrs)
+                        .create();
+                return;
+            } else {
+                System.out.println("DEBUG: NO MATCH - not in loop type position");
+            }
+            // If it's not in the loop type position, it's just a regular identifier (field name)
+            // Don't validate or highlight it
+            return;
+        }
 
         // Pattern: [fieldType primitiveType size fieldName
         // E.g., [simple uint 8 messageType]
@@ -145,15 +187,20 @@ public class MSpecAnnotator implements Annotator {
         if (typeRefPattern.find()) {
             String fieldKeyword = typeRefPattern.group(1);
 
-            // Check if this is a field type keyword (simple, array, etc.)
-            Set<String> fieldTypes = new HashSet<>(Arrays.asList(
-                "abstract", "array", "assert", "checksum", "const", "discriminator",
-                "enum", "implicit", "manualArray", "manual", "optional", "padding",
-                "peek", "reserved", "simple", "state", "typeSwitch", "unknown",
-                "validation", "virtual"
+            // Field types that expect a TYPE reference (not field reference)
+            Set<String> fieldTypesWithTypeRef = new HashSet<>(Arrays.asList(
+                "abstract", "array", "assert", "const", "discriminator",
+                "enum", "implicit", "manualArray", "manual", "optional",
+                "peek", "simple", "virtual"
             ));
 
-            if (fieldTypes.contains(fieldKeyword)) {
+            // Special field types that take field references or other syntax (not type references)
+            // - typeSwitch: takes discriminator field name(s)
+            // - state: takes just a name
+            // - checksum, padding, reserved, unknown: take data types, not custom type refs
+            // - validation: takes expression
+
+            if (fieldTypesWithTypeRef.contains(fieldKeyword)) {
                 // This is a type reference - validate it exists
                 // Skip primitive types
                 if (!PRIMITIVE_TYPES.contains(text.toLowerCase())) {

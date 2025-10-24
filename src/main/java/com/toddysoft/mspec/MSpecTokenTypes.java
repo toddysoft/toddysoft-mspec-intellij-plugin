@@ -83,7 +83,10 @@ public class MSpecTokenTypes {
         tokenTypeMap.put(MSpecLexer.DATE, KEYWORD);
         tokenTypeMap.put(MSpecLexer.DATETIME, KEYWORD);
         tokenTypeMap.put(MSpecLexer.SHOULD_FAIL, KEYWORD);
-        tokenTypeMap.put(MSpecLexer.ARRAY_LOOP_TYPE, KEYWORD);
+
+        // ARRAY_LOOP_TYPE (count, length, terminated) can be used as identifiers in field names
+        // So we map them as IDENTIFIER by default rather than KEYWORD
+        tokenTypeMap.put(MSpecLexer.ARRAY_LOOP_TYPE, IDENTIFIER);
 
         // Comments
         tokenTypeMap.put(MSpecLexer.LINE_COMMENT, COMMENT);

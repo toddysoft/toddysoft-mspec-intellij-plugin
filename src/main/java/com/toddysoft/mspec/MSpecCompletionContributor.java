@@ -73,6 +73,13 @@ public class MSpecCompletionContributor extends CompletionContributor {
         "dateTime"
     };
 
+    // Array loop types
+    private static final String[] ARRAY_LOOP_TYPES = {
+        "count",
+        "length",
+        "terminated"
+    };
+
     // Pattern to find type definitions: [type TypeName, [enum TypeName, [dataIo TypeName, [discriminatedType TypeName
     private static final Pattern TYPE_DEFINITION_PATTERN =
         Pattern.compile("\\[\\s*(?:type|enum|dataIo|discriminatedType)\\s+([A-Z][a-zA-Z0-9_]*)");
@@ -108,6 +115,11 @@ public class MSpecCompletionContributor extends CompletionContributor {
                                 addDataTypeCompletions(result, file);
                                 break;
 
+                            case ARRAY_LOOP_TYPE:
+                                // In array field loop type position - suggest count, length, terminated
+                                addArrayLoopTypeCompletions(result);
+                                break;
+
                             case UNKNOWN:
                                 // Provide both as fallback
                                 addDefinitionTypeCompletions(result);
@@ -124,6 +136,15 @@ public class MSpecCompletionContributor extends CompletionContributor {
      */
     private CompletionContext analyzeContext(PsiElement position) {
         String textBeforeCursor = getTextBeforeCursor(position, 1000);
+
+        // Check if we're in the array loop type position
+        // Pattern: [array typeReference fieldName <cursor>
+        // or: [manualArray typeReference fieldName <cursor>
+        // We need to match: [array/manualArray followed by a type, then a field name
+        Pattern arrayLoopTypePattern = Pattern.compile("\\[\\s*(?:array|manualArray)\\s+\\S+\\s+\\S+\\s+\\S*$");
+        if (arrayLoopTypePattern.matcher(textBeforeCursor).find()) {
+            return CompletionContext.ARRAY_LOOP_TYPE;
+        }
 
         // Check if we're right after an opening bracket
         // Pattern: [ followed by optional whitespace
@@ -241,6 +262,17 @@ public class MSpecCompletionContributor extends CompletionContributor {
     }
 
     /**
+     * Adds array loop type completions (count, length, terminated)
+     */
+    private void addArrayLoopTypeCompletions(CompletionResultSet result) {
+        for (String loopType : ARRAY_LOOP_TYPES) {
+            result.addElement(LookupElementBuilder.create(loopType)
+                    .withTypeText("array loop type")
+                    .withBoldness(true));
+        }
+    }
+
+    /**
      * Scans the file for custom type definitions
      * Finds: [type Name, [enum Name, [dataIo Name, [discriminatedType Name
      */
@@ -264,6 +296,7 @@ public class MSpecCompletionContributor extends CompletionContributor {
         DEFINITION_TYPE,  // After [ at top level - suggest definition types (type, enum, etc.)
         FIELD_TYPE,       // After [ inside type definition - suggest field types (simple, array, etc.)
         DATA_TYPE,        // After field type keyword - suggest data types
+        ARRAY_LOOP_TYPE,  // In array field loop type position - suggest count, length, terminated
         UNKNOWN           // Unknown context
     }
 }

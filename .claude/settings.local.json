@@ -19,7 +19,8 @@
       "Bash(cat:*)",
       "Bash(tree:*)",
       "Bash(JAVA_HOME=/Users/christoferdutz/Library/Java/JavaVirtualMachines/corretto-17.0.16/Contents/Home ./gradlew:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []
