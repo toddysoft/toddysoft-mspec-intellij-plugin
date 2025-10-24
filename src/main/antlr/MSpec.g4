@@ -433,3 +433,9 @@ NEWLINE
 WS
  : [ \t\u000C]+ -> channel(HIDDEN)
  ;
+
+// Catch-all rule for any unrecognized characters
+// This prevents lexer errors and ensures continuous token sequences
+ERROR_CHAR
+ : .
+ ;

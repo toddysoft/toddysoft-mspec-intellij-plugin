@@ -19,6 +19,8 @@
     Features:
     <ul>
       <li>Syntax highlighting for MSpec files</li>
+      <li>Code completion for field types and data types</li>
+      <li>Semantic error highlighting for invalid keywords and type references</li>
       <li>Code structure view</li>
       <li>Error detection based on ANTLR grammar</li>
       <li>File type recognition for .mspec files</li>
@@ -46,5 +48,13 @@
         <!-- Syntax Highlighter -->
         <lang.syntaxHighlighterFactory language="MSpec"
                                        implementationClass="com.toddysoft.mspec.MSpecSyntaxHighlighterFactory"/>
+
+        <!-- Code Completion -->
+        <completion.contributor language="MSpec"
+                                implementationClass="com.toddysoft.mspec.MSpecCompletionContributor"/>
+
+        <!-- Error Highlighting / Semantic Validation -->
+        <annotator language="MSpec"
+                   implementationClass="com.toddysoft.mspec.MSpecAnnotator"/>
     </extensions>
 </idea-plugin>

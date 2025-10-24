@@ -25,6 +25,18 @@
     ]
 ]
 
+[discriminatedType CoolType
+    [simple uint 8 test]
+    [typeSwitch test
+        ['9' CoolTest
+        ]
+        ['0' Test
+            [simple Item lalala]
+            [simple Huiiii test]
+        ]
+    ]
+]
+
 [type Item
     [simple uint 8 itemType]
     [simple uint 16 itemLength]

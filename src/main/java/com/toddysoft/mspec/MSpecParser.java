@@ -8,7 +8,13 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Parser implementation for MSpec language.
- * This is a simplified parser that creates a flat PSI tree.
+ *
+ * Note: This is a simplified parser that creates a flat PSI tree.
+ * For this language, a flat tree with text-based validation in the annotator
+ * is sufficient and more maintainable than trying to force ANTLR integration.
+ *
+ * Future improvement: Consider using Grammar-Kit (https://github.com/JetBrains/Grammar-Kit)
+ * instead of ANTLR for proper IntelliJ PSI integration if hierarchical tree is needed.
  */
 public class MSpecParser implements PsiParser {
     @NotNull
@@ -16,7 +22,8 @@ public class MSpecParser implements PsiParser {
     public ASTNode parse(@NotNull IElementType root, @NotNull PsiBuilder builder) {
         PsiBuilder.Marker rootMarker = builder.mark();
 
-        // Simple parse all tokens approach
+        // Simple parse: consume all tokens
+        // The annotator handles validation using text-based analysis
         while (!builder.eof()) {
             builder.advanceLexer();
         }
