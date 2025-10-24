@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl:*)",
+      "Read(//tmp/**)",
+      "Bash(mkdir:*)",
+      "Bash(./gradlew generateGrammarSource:*)",
+      "Bash(./gradlew tasks:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(java -version:*)",
+      "Bash(/usr/libexec/java_home:*)",
+      "Bash(JAVA_HOME=/Users/christoferdutz/Library/Java/JavaVirtualMachines/corretto-17.0.16/Contents/Home ./gradlew generateGrammarSource:*)",
+      "Bash(export JAVA_HOME=/Users/christoferdutz/Library/Java/JavaVirtualMachines/corretto-17.0.16/Contents/Home)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(./gradlew clean build:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(cat:*)",
+      "Bash(tree:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
