@@ -151,8 +151,52 @@ The error highlighting:
 - Validates type references against defined types in the file
 - Shows errors immediately as you type
 
+## Navigate to Definition
+
+The plugin now supports "Go to Definition" functionality:
+
+### How to Use
+
+1. Place your cursor on a type reference (e.g., `EipStatus` in `[simple EipStatus status]`)
+2. Press **Cmd+B** (macOS) or **Ctrl+B** (Windows/Linux)
+3. The editor will jump to the type definition
+
+### Features
+
+- Works within the same file
+- Works across files in the same directory
+- Searches for type definitions (`[type Name]`)
+- Searches for enum definitions (`[enum Name]`)
+- External types (from other files) are highlighted in italic
+
+### Example
+
+```mspec
+// File: eip.mspec
+[type EipPacket
+    [simple EipStatus status]    // Cmd+B on "EipStatus" jumps to line 90
+]
+
+// ... (many lines later)
+
+[enum uint 32 EipStatus           // Line 90: Definition
+    ['0x00000000' SUCCESS]
+    ['0x00000001' INVALID_COMMAND]
+]
+```
+
+## Cross-File Type Recognition
+
+The plugin automatically recognizes types defined in other .mspec files located in the same directory:
+
+- **Local types** (defined in current file): Normal highlighting
+- **External types** (defined in sibling .mspec files): Italic highlighting
+- **Undefined types**: Red error highlighting
+
+This makes it easy to organize your MSpec definitions across multiple files without getting false errors.
+
 ## Limitations
 
-- Currently only scans the current file for custom types
-- Cross-file type references not yet supported
+- Navigate to definition only works within the same directory
 - No completion for expression syntax (in tick marks `'...'`)
+- Cross-directory type references not yet supported

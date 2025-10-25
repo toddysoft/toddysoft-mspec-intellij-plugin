@@ -12,6 +12,23 @@ An IntelliJ IDEA plugin that provides language support for Apache PLC4X MSpec (M
   - Numeric literals
   - Operators and brackets
 
+- **Code Completion**: Intelligent completion for:
+  - Definition types (type, enum, discriminatedType, dataIo)
+  - Field types (simple, array, const, etc.)
+  - Data types (primitive types and custom types defined in your files)
+
+- **Semantic Validation**: Real-time error detection for:
+  - Invalid keywords and field types
+  - Missing size parameters for types like int, uint, float, string
+  - Undefined type references
+  - Proper validation following ANTLR grammar rules
+
+- **Cross-File Type Recognition**: Automatically recognizes types defined in other .mspec files in the same directory
+
+- **Navigate to Definition**: Jump to type definitions with Cmd+B (macOS) or Ctrl+B (Windows/Linux)
+  - Works across files in the same directory
+  - External types are visually distinguished with italic styling
+
 - **File Type Recognition**: Automatic recognition of `.mspec` files
 
 - **ANTLR-based Parser**: Uses the official Apache PLC4X MSpec ANTLR4 grammar for accurate parsing
@@ -67,6 +84,8 @@ toddysoft-mspec-intellij-plugin/
 ├── src/
 │   ├── main/
 │   │   ├── antlr/              # ANTLR grammar files
+│   │   │   ├── MSpec.g4
+│   │   │   └── Expression.g4
 │   │   ├── java/               # Java source files
 │   │   │   └── com/toddysoft/mspec/
 │   │   │       ├── MSpecLanguage.java
@@ -74,14 +93,24 @@ toddysoft-mspec-intellij-plugin/
 │   │   │       ├── MSpecLexerAdapter.java
 │   │   │       ├── MSpecParserDefinition.java
 │   │   │       ├── MSpecSyntaxHighlighter.java
+│   │   │       ├── MSpecAnnotator.java          # Semantic validation
+│   │   │       ├── MSpecCompletionContributor.java
+│   │   │       ├── MSpecGotoDeclarationHandler.java  # Navigate to definition
 │   │   │       └── ...
 │   │   └── resources/
 │   │       ├── META-INF/
 │   │       │   └── plugin.xml  # Plugin descriptor
 │   │       └── icons/
 │   │           └── mspec.svg   # File type icon
+├── examples/                   # Example MSpec files
+│   ├── eip.mspec
+│   ├── ads.mspec
+│   └── profinet/
 ├── build.gradle.kts            # Gradle build configuration
-└── README.md
+├── README.md
+├── QUICKSTART.md
+├── COMPLETION.md
+└── PSI_ARCHITECTURE.md
 ```
 
 ## Development Notes

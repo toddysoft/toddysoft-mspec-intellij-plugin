@@ -27,12 +27,13 @@ The plugin ZIP will be created at: `build/distributions/toddysoft-mspec-intellij
 ## Testing the Plugin
 
 1. After restarting IntelliJ IDEA, create a new file with the `.mspec` extension
-2. Open the sample file from `examples/sample.mspec` to see syntax highlighting in action
-3. The plugin will recognize keywords like:
-   - `type`, `enum`, `constants`
-   - `simple`, `array`, `const`
-   - `typeSwitch`, `discriminator`
-   - Data types: `uint`, `int`, `byte`, `string`, etc.
+2. Open example files from `examples/` directory (e.g., `eip.mspec`, `ads.mspec`) to see the plugin in action
+3. Features you can test:
+   - **Syntax Highlighting**: Keywords like `type`, `enum`, `simple`, `array` are color-coded
+   - **Code Completion**: Press Ctrl+Space after `[` to see suggestions
+   - **Navigate to Definition**: Cmd+B (macOS) or Ctrl+B (Windows/Linux) on a type reference
+   - **Error Detection**: Invalid keywords and undefined types are highlighted in red
+   - **Cross-File Types**: Types from other .mspec files in same directory are recognized (shown in italic)
 
 ## Development Mode
 
@@ -70,6 +71,24 @@ If Gradle daemon causes problems:
 
 ## Next Steps
 
-- Explore the MSpec grammar in `src/main/antlr/`
-- Customize syntax highlighting in `MSpecSyntaxHighlighter.java`
-- Add more language features (code completion, refactoring, etc.)
+### Learn More About the Plugin
+
+- **COMPLETION.md** - Detailed guide on code completion, error highlighting, and navigate to definition
+- **PSI_ARCHITECTURE.md** - Technical details on the plugin architecture and design decisions
+- **README.md** - Full feature list and project overview
+
+### Explore the Code
+
+- `src/main/antlr/` - ANTLR grammar files (MSpec.g4, Expression.g4)
+- `src/main/java/com/toddysoft/mspec/` - Plugin source code
+  - `MSpecAnnotator.java` - Semantic validation and error detection
+  - `MSpecGotoDeclarationHandler.java` - Navigate to definition feature
+  - `MSpecCompletionContributor.java` - Code completion provider
+  - `MSpecSyntaxHighlighter.java` - Syntax highlighting
+
+### Example Files
+
+Open files in `examples/` to see real-world MSpec usage:
+- `examples/eip.mspec` - Ethernet/IP protocol definitions
+- `examples/ads.mspec` - ADS protocol definitions
+- `examples/profinet/pnio.mspec` - PROFINET I/O definitions

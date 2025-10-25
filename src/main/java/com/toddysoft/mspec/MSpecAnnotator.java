@@ -94,21 +94,14 @@ public class MSpecAnnotator implements Annotator {
         // Pattern: [array typeRef fieldName <loopType>
         // or: [manualArray typeRef fieldName <loopType>
         if (ARRAY_LOOP_TYPES.contains(text.toLowerCase())) {
-            System.out.println("DEBUG: Found array loop type candidate: '" + text + "'");
-            System.out.println("DEBUG: Before context: '" + beforeContext + "'");
-
             // Check if it's in the loop type position
             // Match: [array/manualArray typeRef fieldName whitespace (but don't require end of string)
             // Use [\\s\\S]* instead of .* to match newlines as well
             if (beforeContext.matches("[\\s\\S]*\\[\\s*(?:array|manualArray)\\s+\\S+\\s+\\S+\\s+[\\s\\S]*")) {
-                System.out.println("DEBUG: MATCH! This is a loop type in the correct position");
-
                 // This is a loop type keyword in the correct position
                 // Get the keyword text attributes from the current color scheme
                 TextAttributes keywordAttrs = EditorColorsManager.getInstance().getGlobalScheme()
                         .getAttributes(com.intellij.openapi.editor.DefaultLanguageHighlighterColors.KEYWORD);
-
-                System.out.println("DEBUG: Keyword attrs: " + keywordAttrs);
 
                 // Use enforcedTextAttributes to override base highlighting
                 holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
@@ -116,8 +109,6 @@ public class MSpecAnnotator implements Annotator {
                         .enforcedTextAttributes(keywordAttrs)
                         .create();
                 return;
-            } else {
-                System.out.println("DEBUG: NO MATCH - not in loop type position");
             }
             // If it's not in the loop type position, it's just a regular identifier (field name)
             // Don't validate or highlight it

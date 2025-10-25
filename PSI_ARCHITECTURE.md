@@ -12,12 +12,24 @@ The plugin currently uses a **flat PSI tree** where all tokens are direct childr
 ### What Works Today
 
 ✅ **Syntax Highlighting** - Fully functional
+
 ✅ **Semantic Validation** - Correctly identifies:
 - Invalid type references (e.g., "Huiiii" when undefined)
 - Missing size parameters (e.g., "uint" without a number)
 - Field names vs type references (e.g., "messageType" not flagged as error)
+- Case-sensitive type validation (uppercase = names, lowercase = primitive types)
 
 ✅ **Code Completion** - Suggests field types and data types
+
+✅ **Cross-File Type Recognition** - Recognizes types from other .mspec files in same directory
+- Local types: normal highlighting
+- External types: italic highlighting
+- Undefined types: error highlighting
+
+✅ **Navigate to Definition** - Jump to type definitions with Cmd+B / Ctrl+B
+- Works within same file and across sibling files
+- Uses `GotoDeclarationHandler` for ANTLR compatibility
+
 ✅ **File Type Recognition** - `.mspec` files properly detected
 
 ### Architecture
@@ -47,6 +59,23 @@ MSpec Plugin Architecture:
 │ - Validates type references             │
 │ - Checks size parameters                │
 │ - Distinguishes field names from types  │
+│ - Cross-file type recognition           │
+│ - Visual distinction (italic) for       │
+│   external types                        │
+└─────────────────────────────────────────┘
+            ↓
+┌─────────────────────────────────────────┐
+│ MSpecGotoDeclarationHandler             │
+│ - Navigate to definition (Cmd+B)        │
+│ - Text-based type search                │
+│ - Works across files in same directory  │
+└─────────────────────────────────────────┘
+            ↓
+┌─────────────────────────────────────────┐
+│ MSpecCompletionContributor              │
+│ - Code completion suggestions           │
+│ - Field types and data types            │
+│ - Custom type recognition               │
 └─────────────────────────────────────────┘
 ```
 
@@ -75,13 +104,47 @@ This approach:
 - **Performs well** (no tree traversal needed)
 - **Is maintainable** (simple regex patterns)
 
+## Implemented Features (Option 3: Smart Navigation)
+
+The plugin successfully implements **navigate to definition** using text-based search with `GotoDeclarationHandler`:
+
+### How It Works
+
+The `MSpecGotoDeclarationHandler`:
+1. Intercepts navigation requests (Cmd+B / Ctrl+B)
+2. Checks if cursor is on an identifier in type reference position
+3. Uses regex patterns to find type definitions in current and sibling files
+4. Returns the definition location for navigation
+
+**Advantages:**
+- Works perfectly with ANTLR's flat PSI structure
+- No need for complex PSI tree restructuring
+- Fast and reliable
+- Handles cross-file references
+
+**Implementation:**
+```java
+// Pattern matching for type definitions
+Pattern.compile("\\[\\s*(?:type|dataIo|discriminatedType)\\s+([A-Za-z][A-Za-z0-9_-]*)");
+Pattern.compile("\\[\\s*enum\\s+(?:...)?([A-Za-z][A-Za-z0-9_-]*)");
+
+// Search current file and sibling .mspec files
+PsiElement definition = findTypeDefinition(file, typeName);
+if (definition == null) {
+    // Search sibling files in same directory
+    for (PsiFile siblingFile : getSiblingMspecFiles()) {
+        definition = findTypeDefinition(siblingFile, typeName);
+    }
+}
+```
+
 ## Future Improvements
 
-### If Hierarchical PSI Is Needed
+### If More Advanced Features Are Needed
 
-For advanced features like go-to-definition, find usages, or rename refactoring, you would need a proper hierarchical PSI tree. Here are the options:
+If you need features like **find usages** or **rename refactoring**, here are the options:
 
-#### Option 1: Use Grammar-Kit (Recommended)
+#### Option 1: Use Grammar-Kit
 [Grammar-Kit](https://github.com/JetBrains/Grammar-Kit) is JetBrains' official parser generator for IntelliJ plugins.
 
 **Pros:**
@@ -92,12 +155,6 @@ For advanced features like go-to-definition, find usages, or rename refactoring,
 **Cons:**
 - Requires rewriting grammar from ANTLR to Grammar-Kit format
 - Learning curve for Grammar-Kit syntax
-
-**How to migrate:**
-1. Convert `MSpec.g4` to Grammar-Kit `.bnf` format
-2. Configure Grammar-Kit plugin in `build.gradle.kts`
-3. Generate PSI classes
-4. Implement reference resolution and navigation
 
 #### Option 2: Manual PsiBuilder Parser
 Write a hand-coded parser that uses `PsiBuilder` directly.
@@ -110,45 +167,57 @@ Write a hand-coded parser that uses `PsiBuilder` directly.
 - Labor-intensive to write and maintain
 - Must manually handle all grammar rules
 
-#### Option 3: Keep Flat PSI, Add Smart Navigation
-Implement navigation features using text-based search rather than PSI references.
-
-**Pros:**
-- Doesn't require PSI restructuring
-- Faster to implement
-
-**Cons:**
-- Less robust than true PSI-based navigation
-- May not handle all edge cases
-
 ### Recommended Path Forward
 
-For now, **keep the current flat PSI + text-based validation**. It's working well.
+The current implementation with **flat PSI + text-based features** is working excellently. All essential IDE features are implemented:
+- ✅ Syntax highlighting
+- ✅ Code completion
+- ✅ Semantic validation
+- ✅ Navigate to definition
+- ✅ Cross-file type recognition
 
-If you later need advanced features:
-1. Start with **Option 3** (smart navigation) for quick wins
-2. If that's insufficient, migrate to **Grammar-Kit** for full PSI support
+Only migrate to Grammar-Kit if you need advanced refactoring features like rename or find all usages.
 
 ## Technical Details
 
 ### Current Files
 - `MSpecParser.java` - Simple flat parser
-- `MSpecAnnotator.java` - Text-based validator
+- `MSpecAnnotator.java` - Text-based validator with cross-file type recognition
+- `MSpecGotoDeclarationHandler.java` - Navigate to definition implementation
+- `MSpecCompletionContributor.java` - Code completion provider
 - `MSpecFileType.java` - File type registration
 - `MSpecLexerAdapter.java` - ANTLR lexer wrapper
-- `MSpec.g4` - ANTLR grammar (used only for lexer)
+- `MSpecSyntaxHighlighter.java` - Syntax highlighting
+- `MSpec.g4` - ANTLR grammar (used for lexer generation)
+- `Expression.g4` - Expression grammar (used for lexer generation)
 
-### Unused Files (Can Be Deleted)
-- `MSpecTypes.java` - Element type definitions (not used in flat PSI)
-- `MSpecElementType.java` - Custom element type class (not needed)
-- `psi/*.java` - Specific PSI element classes (not used)
+### Architecture Decisions
 
-These were created during an attempt to integrate ANTLR parsing with IntelliJ PSI, which didn't work due to token stream incompatibility.
+**Why GotoDeclarationHandler instead of PsiReference?**
+- `GotoDeclarationHandler` works directly with the navigation action
+- Doesn't require specific PSI element types
+- Compatible with ANTLR's flat PSI tree
+- Simpler and more maintainable than PsiReferenceContributor
+
+**Why text-based validation?**
+- ANTLR's token stream doesn't integrate well with IntelliJ's PsiBuilder
+- Regex patterns are sufficient for MSpec's straightforward syntax
+- Performs well without tree traversal
+- Easy to maintain and extend
 
 ## Summary
 
-**Current state**: ✅ Working plugin with flat PSI and text-based validation
-**Hierarchical PSI attempt**: ❌ Failed due to ANTLR/PsiBuilder incompatibility
-**Recommendation**: Keep current architecture; migrate to Grammar-Kit only if advanced features are needed
+**Current state**: ✅ Fully functional plugin with flat PSI and text-based features
 
-The plugin successfully provides syntax highlighting, code completion, and semantic validation - all the core features needed for productive MSpec file editing.
+**Implemented features:**
+- ✅ Syntax highlighting
+- ✅ Code completion (field types, data types, custom types)
+- ✅ Semantic validation (invalid keywords, size parameters, undefined types)
+- ✅ Navigate to definition (Cmd+B / Ctrl+B)
+- ✅ Cross-file type recognition
+- ✅ Visual distinction for external types (italic)
+
+**Architecture approach**: Flat PSI + text-based validation + GotoDeclarationHandler
+**Recommendation**: Keep current architecture - it provides all essential IDE features
+
+The plugin successfully provides all core features needed for productive MSpec file editing without requiring complex PSI tree restructuring.

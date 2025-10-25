@@ -21,6 +21,9 @@
       <li>Syntax highlighting for MSpec files</li>
       <li>Code completion for field types and data types</li>
       <li>Semantic error highlighting for invalid keywords and type references</li>
+      <li>Navigate to definition (Cmd+B / Ctrl+B) for type references</li>
+      <li>Cross-file type reference support within the same directory</li>
+      <li>Visual distinction for external type references (italic)</li>
       <li>Code structure view</li>
       <li>Error detection based on ANTLR grammar</li>
       <li>File type recognition for .mspec files</li>
@@ -56,5 +59,8 @@
         <!-- Error Highlighting / Semantic Validation -->
         <annotator language="MSpec"
                    implementationClass="com.toddysoft.mspec.MSpecAnnotator"/>
+
+        <!-- Go to Declaration Handler for Navigate to Definition (Cmd+B / Ctrl+B) -->
+        <gotoDeclarationHandler implementation="com.toddysoft.mspec.MSpecGotoDeclarationHandler"/>
     </extensions>
 </idea-plugin>
