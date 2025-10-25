@@ -7,9 +7,11 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.util.ProcessingContext;
 import com.toddysoft.mspec.psi.MSpecFile;
+import com.toddysoft.mspec.util.MSpecPackageUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -273,11 +275,29 @@ public class MSpecCompletionContributor extends CompletionContributor {
     }
 
     /**
-     * Scans the file for custom type definitions
+     * Scans the current file and related files for custom type definitions.
      * Finds: [type Name, [enum Name, [dataIo Name, [discriminatedType Name
+     * Related files include same directory and same package across source roots.
      */
     private Set<String> findCustomTypes(PsiFile file) {
         Set<String> types = new HashSet<>();
+
+        // Extract types from the current file
+        extractTypesFromFile(file, types);
+
+        // Extract types from related files (same directory and same package across source roots)
+        List<PsiFile> relatedFiles = MSpecPackageUtil.findRelatedMSpecFiles(file);
+        for (PsiFile relatedFile : relatedFiles) {
+            extractTypesFromFile(relatedFile, types);
+        }
+
+        return types;
+    }
+
+    /**
+     * Extracts type definitions from a single file.
+     */
+    private void extractTypesFromFile(PsiFile file, Set<String> types) {
         String fileText = file.getText();
 
         Matcher matcher = TYPE_DEFINITION_PATTERN.matcher(fileText);
@@ -285,8 +305,6 @@ public class MSpecCompletionContributor extends CompletionContributor {
             String typeName = matcher.group(1);
             types.add(typeName);
         }
-
-        return types;
     }
 
     /**

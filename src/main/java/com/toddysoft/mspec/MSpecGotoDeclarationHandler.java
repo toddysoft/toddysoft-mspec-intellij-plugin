@@ -4,11 +4,13 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.toddysoft.mspec.util.MSpecPackageUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -65,24 +67,18 @@ public class MSpecGotoDeclarationHandler implements GotoDeclarationHandler {
             return null;
         }
 
-        // Search for the type definition
+        // Search for the type definition in the current file
         PsiElement definition = findTypeDefinition(file, text);
         if (definition != null) {
             return new PsiElement[]{definition};
         }
 
-        // Search in sibling .mspec files
-        if (file.getParent() != null) {
-            for (PsiElement child : file.getParent().getChildren()) {
-                if (child instanceof PsiFile) {
-                    PsiFile siblingFile = (PsiFile) child;
-                    if (!siblingFile.equals(file) && siblingFile.getName().endsWith(".mspec")) {
-                        definition = findTypeDefinition(siblingFile, text);
-                        if (definition != null) {
-                            return new PsiElement[]{definition};
-                        }
-                    }
-                }
+        // Search in related .mspec files (same directory and same package across source roots)
+        List<PsiFile> relatedFiles = MSpecPackageUtil.findRelatedMSpecFiles(file);
+        for (PsiFile relatedFile : relatedFiles) {
+            definition = findTypeDefinition(relatedFile, text);
+            if (definition != null) {
+                return new PsiElement[]{definition};
             }
         }
 

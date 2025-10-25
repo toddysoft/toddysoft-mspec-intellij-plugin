@@ -8,6 +8,7 @@ import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.toddysoft.mspec.util.MSpecPackageUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -258,22 +259,15 @@ public class MSpecAnnotator implements Annotator {
     }
 
     /**
-     * Finds type definitions in other .mspec files in the same directory (excluding current file)
+     * Finds type definitions in related .mspec files (same directory and same package across source roots)
      */
     private Set<String> findExternalTypes(PsiFile file) {
         Set<String> types = new HashSet<>();
 
-        // Add types from other .mspec files in the same directory
-        if (file.getParent() != null) {
-            for (PsiElement child : file.getParent().getChildren()) {
-                if (child instanceof PsiFile) {
-                    PsiFile siblingFile = (PsiFile) child;
-                    // Only process .mspec files, skip the current file
-                    if (!siblingFile.equals(file) && siblingFile.getName().endsWith(".mspec")) {
-                        extractTypesFromFile(siblingFile, types);
-                    }
-                }
-            }
+        // Add types from related .mspec files (same directory and same package across source roots)
+        List<PsiFile> relatedFiles = MSpecPackageUtil.findRelatedMSpecFiles(file);
+        for (PsiFile relatedFile : relatedFiles) {
+            extractTypesFromFile(relatedFile, types);
         }
 
         return types;
