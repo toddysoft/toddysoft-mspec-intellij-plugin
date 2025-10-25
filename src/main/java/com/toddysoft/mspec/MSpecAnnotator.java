@@ -40,9 +40,12 @@ public class MSpecAnnotator implements Annotator {
     // Pattern to find type definitions
     private static final Pattern TYPE_DEFINITION_PATTERN =
         Pattern.compile("\\[\\s*(?:type|dataIo|discriminatedType)\\s+([A-Za-z][A-Za-z0-9_-]*)");
-    // Pattern matches enum definitions with optional base type: [enum Name] or [enum uint 8 Name]
+    // Pattern matches enum definitions with optional base type following ANTLR dataType grammar:
+    // [enum Name] - no type
+    // [enum bit Name], [enum byte Name], [enum vint Name], etc. - types without size
+    // [enum int 8 Name], [enum uint 16 Name], etc. - types with required size
     private static final Pattern ENUM_DEFINITION_PATTERN =
-        Pattern.compile("\\[\\s*enum\\s+(?:[A-Za-z]+\\s+\\d+\\s+)?([A-Za-z][A-Za-z0-9_-]*)");
+        Pattern.compile("\\[\\s*enum\\s+(?:(?:(?:bit|byte|vint|vuint|time|date|dateTime|vstring)\\s+)|(?:(?:int|uint|float|ufloat|string)\\s+\\d+\\s+))?([A-Za-z][A-Za-z0-9_-]*)");
 
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
@@ -215,12 +218,28 @@ public class MSpecAnnotator implements Annotator {
                 // This is a type reference - validate it exists
                 // Skip primitive types (only lowercase variants are primitive types)
                 if (!PRIMITIVE_TYPES.contains(text)) {
-                    Set<String> customTypes = findCustomTypes(file);
-                    if (!customTypes.contains(text)) {
+                    Set<String> localTypes = findLocalTypes(file);
+                    Set<String> externalTypes = findExternalTypes(file);
+
+                    if (!localTypes.contains(text) && !externalTypes.contains(text)) {
+                        // Type not found anywhere - error
                         holder.newAnnotation(HighlightSeverity.ERROR,
                             "Undefined type '" + text + "'. Type must be defined with [type " + text + "], [enum " + text + "], or similar.")
                             .range(element.getTextRange())
                             .create();
+                    } else if (externalTypes.contains(text) && !localTypes.contains(text)) {
+                        // Type is external - add subtle highlighting to indicate it's from another file
+                        TextAttributes externalTypeAttrs = EditorColorsManager.getInstance().getGlobalScheme()
+                                .getAttributes(com.intellij.openapi.editor.DefaultLanguageHighlighterColors.CLASS_REFERENCE);
+
+                        // Create a copy and make it slightly different (e.g., italic or underlined)
+                        TextAttributes customAttrs = externalTypeAttrs.clone();
+                        customAttrs.setFontType(customAttrs.getFontType() | java.awt.Font.ITALIC);
+
+                        holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                                .range(element.getTextRange())
+                                .enforcedTextAttributes(customAttrs)
+                                .create();
                     }
                 }
             }
@@ -228,10 +247,50 @@ public class MSpecAnnotator implements Annotator {
     }
 
     /**
-     * Finds all custom type definitions in the file
+     * Finds type definitions only in the current file
+     */
+    private Set<String> findLocalTypes(PsiFile file) {
+        Set<String> types = new HashSet<>();
+        extractTypesFromFile(file, types);
+        return types;
+    }
+
+    /**
+     * Finds type definitions in other .mspec files in the same directory (excluding current file)
+     */
+    private Set<String> findExternalTypes(PsiFile file) {
+        Set<String> types = new HashSet<>();
+
+        // Add types from other .mspec files in the same directory
+        if (file.getParent() != null) {
+            for (PsiElement child : file.getParent().getChildren()) {
+                if (child instanceof PsiFile) {
+                    PsiFile siblingFile = (PsiFile) child;
+                    // Only process .mspec files, skip the current file
+                    if (!siblingFile.equals(file) && siblingFile.getName().endsWith(".mspec")) {
+                        extractTypesFromFile(siblingFile, types);
+                    }
+                }
+            }
+        }
+
+        return types;
+    }
+
+    /**
+     * Finds all custom type definitions in the file and other .mspec files in the same directory
      */
     private Set<String> findCustomTypes(PsiFile file) {
         Set<String> types = new HashSet<>();
+        types.addAll(findLocalTypes(file));
+        types.addAll(findExternalTypes(file));
+        return types;
+    }
+
+    /**
+     * Extracts type definitions from a single file
+     */
+    private void extractTypesFromFile(PsiFile file, Set<String> types) {
         String fileText = file.getText();
 
         // Find regular type definitions (type, dataIo, discriminatedType)
@@ -245,7 +304,5 @@ public class MSpecAnnotator implements Annotator {
         while (enumMatcher.find()) {
             types.add(enumMatcher.group(1));
         }
-
-        return types;
     }
 }
