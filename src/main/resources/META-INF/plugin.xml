@@ -5,10 +5,10 @@
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-    <name>MSpec Language Support</name>
+    <name>ToddySoft: MSpec Language Support</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor email="support@toddysoft.com" url="https://www.toddysoft.com">ToddySoft</vendor>
+    <vendor email="support@toddysoft.com" url="https://toddysoft.com">ToddySoft</vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
@@ -62,5 +62,11 @@
 
         <!-- Go to Declaration Handler for Navigate to Definition (Cmd+B / Ctrl+B) -->
         <gotoDeclarationHandler implementation="com.toddysoft.mspec.MSpecGotoDeclarationHandler"/>
+
+        <!-- Settings Page -->
+        <applicationConfigurable parentId="tools"
+                                 instance="com.toddysoft.mspec.MSpecSettingsConfigurable"
+                                 id="com.toddysoft.mspec.MSpecSettingsConfigurable"
+                                 displayName="MSpec Language Support"/>
     </extensions>
 </idea-plugin>
