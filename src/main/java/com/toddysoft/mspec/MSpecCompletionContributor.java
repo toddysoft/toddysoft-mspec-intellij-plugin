@@ -39,6 +39,7 @@ public class MSpecCompletionContributor extends CompletionContributor {
         "abstract",
         "array",
         "assert",
+        "batchSet",
         "checksum",
         "const",
         "discriminator",
