@@ -148,11 +148,13 @@ public class MSpecAnnotator implements Annotator {
             return;
         }
 
-        // Pattern: ['discriminatorValue' CASENAME
+        // Pattern: ['discriminatorValue' CASENAME (without asterisk)
         // E.g., ['INT' INT or ['0x01' BOOL
-        // This is a typeSwitch case name - don't validate as a type reference
+        // This is a plain typeSwitch case name - don't validate as a type reference
+        // Note: ['discriminatorValue' *CASENAME won't match this pattern because of the asterisk,
+        // so it will fall through to type validation (which is correct, as it defines ParentType+CaseName)
         if (beforeContext.matches(".*\\[\\s*'[^']*'\\s+$")) {
-            // This is a case name in a typeSwitch statement - don't validate
+            // Plain case name without asterisk - don't validate
             return;
         }
 
@@ -170,8 +172,17 @@ public class MSpecAnnotator implements Annotator {
             }
 
             // Extract the first token (should be the size number)
-            int spaceIdx = trimmed.indexOf(' ');
-            String firstToken = spaceIdx > 0 ? trimmed.substring(0, spaceIdx) : trimmed;
+            // Split by any whitespace (space, tab, newline, etc.)
+            String[] tokens = trimmed.split("\\s+");
+            if (tokens.length == 0) {
+                holder.newAnnotation(HighlightSeverity.ERROR,
+                    "Type '" + text + "' requires a size parameter (e.g., '" + text + " 8')")
+                    .range(element.getTextRange())
+                    .create();
+                return;
+            }
+
+            String firstToken = tokens[0];
 
             // Check if the first token is a valid number
             if (!firstToken.matches("\\d+")) {
@@ -295,5 +306,44 @@ public class MSpecAnnotator implements Annotator {
         while (enumMatcher.find()) {
             types.add(enumMatcher.group(1));
         }
+
+        // Find typeSwitch case definitions with asterisk prefix
+        // Pattern: ['discriminatorValue' *CaseName inside a parent type
+        // These create subtypes like ParentType + CaseName = ParentTypeCaseName
+        Pattern asteriskCasePattern = Pattern.compile("\\[\\s*'[^']*'\\s+\\*([A-Za-z][A-Za-z0-9_-]*)");
+        Matcher asteriskMatcher = asteriskCasePattern.matcher(fileText);
+        while (asteriskMatcher.find()) {
+            String caseName = asteriskMatcher.group(1);
+            int caseOffset = asteriskMatcher.start();
+
+            // Find the parent type by searching backwards for the containing type definition
+            String parentTypeName = findParentTypeName(fileText, caseOffset);
+            if (parentTypeName != null) {
+                // Combine parent type name + case name
+                String fullTypeName = parentTypeName + caseName;
+                types.add(fullTypeName);
+            }
+        }
+    }
+
+    /**
+     * Finds the parent type name for a typeSwitch case at the given offset.
+     * Searches backwards from the offset to find the containing [type Name] or [discriminatedType Name].
+     */
+    private String findParentTypeName(String fileText, int offset) {
+        // Search backwards for the type definition
+        String beforeText = fileText.substring(0, offset);
+
+        // Pattern to find [type Name] or [discriminatedType Name]
+        // We want the LAST match before our offset (closest parent)
+        Pattern parentTypePattern = Pattern.compile("\\[\\s*(?:type|discriminatedType|dataIo)\\s+([A-Za-z][A-Za-z0-9_-]*)");
+        Matcher matcher = parentTypePattern.matcher(beforeText);
+
+        String lastMatch = null;
+        while (matcher.find()) {
+            lastMatch = matcher.group(1);
+        }
+
+        return lastMatch;
     }
 }

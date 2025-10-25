@@ -148,6 +148,44 @@ public class MSpecGotoDeclarationHandler implements GotoDeclarationHandler {
             }
         }
 
+        // Search for typeSwitch case definitions with asterisk prefix
+        // Pattern: ['discriminatorValue' *CaseName creates ParentTypeCaseName
+        Pattern asteriskCasePattern = Pattern.compile("\\[\\s*'[^']*'\\s+\\*([A-Za-z][A-Za-z0-9_-]*)");
+        Matcher asteriskMatcher = asteriskCasePattern.matcher(fileText);
+        while (asteriskMatcher.find()) {
+            String caseName = asteriskMatcher.group(1);
+            int caseOffset = asteriskMatcher.start();
+
+            // Find the parent type name
+            String parentTypeName = findParentTypeName(fileText, caseOffset);
+            if (parentTypeName != null) {
+                String fullTypeName = parentTypeName + caseName;
+                if (typeName.equals(fullTypeName)) {
+                    // Navigate to the case name (after the asterisk)
+                    int startOffset = asteriskMatcher.start(1);
+                    return file.findElementAt(startOffset);
+                }
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * Finds the parent type name for a typeSwitch case at the given offset.
+     */
+    private String findParentTypeName(String fileText, int offset) {
+        String beforeText = fileText.substring(0, offset);
+
+        // Pattern to find [type Name] or [discriminatedType Name]
+        Pattern parentTypePattern = Pattern.compile("\\[\\s*(?:type|discriminatedType|dataIo)\\s+([A-Za-z][A-Za-z0-9_-]*)");
+        Matcher matcher = parentTypePattern.matcher(beforeText);
+
+        String lastMatch = null;
+        while (matcher.find()) {
+            lastMatch = matcher.group(1);
+        }
+
+        return lastMatch;
     }
 }
