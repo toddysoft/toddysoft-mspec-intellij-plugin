@@ -40,8 +40,9 @@ public class MSpecAnnotator implements Annotator {
     // Pattern to find type definitions
     private static final Pattern TYPE_DEFINITION_PATTERN =
         Pattern.compile("\\[\\s*(?:type|dataIo|discriminatedType)\\s+([A-Za-z][A-Za-z0-9_-]*)");
+    // Pattern matches enum definitions with optional base type: [enum Name] or [enum uint 8 Name]
     private static final Pattern ENUM_DEFINITION_PATTERN =
-        Pattern.compile("\\[\\s*enum\\s+[A-Za-z]+\\s+\\d+\\s+([A-Za-z][A-Za-z0-9_-]*)");
+        Pattern.compile("\\[\\s*enum\\s+(?:[A-Za-z]+\\s+\\d+\\s+)?([A-Za-z][A-Za-z0-9_-]*)");
 
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
@@ -138,7 +139,8 @@ public class MSpecAnnotator implements Annotator {
 
             // Check if typeRef is NOT a primitive type (it's a custom type)
             // and NOT a keyword like "byte" which doesn't need size
-            if (!PRIMITIVE_TYPES.contains(typeRef.toLowerCase())) {
+            // Only match lowercase primitive types; uppercase identifiers are type names
+            if (!PRIMITIVE_TYPES.contains(typeRef)) {
                 // This is a field name after a custom type reference - don't validate
                 return;
             }
@@ -152,8 +154,17 @@ public class MSpecAnnotator implements Annotator {
             return;
         }
 
+        // Pattern: ['discriminatorValue' CASENAME
+        // E.g., ['INT' INT or ['0x01' BOOL
+        // This is a typeSwitch case name - don't validate as a type reference
+        if (beforeContext.matches(".*\\[\\s*'[^']*'\\s+$")) {
+            // This is a case name in a typeSwitch statement - don't validate
+            return;
+        }
+
         // Check if this is a sized type that needs validation (int, uint, float, ufloat, string)
-        if (SIZED_TYPES.contains(text.toLowerCase())) {
+        // Only match lowercase primitive types; uppercase identifiers (INT, UINT) are likely type/case names
+        if (SIZED_TYPES.contains(text)) {
             // Check if followed by a valid number (size parameter)
             String trimmed = afterContext.trim();
             if (trimmed.isEmpty()) {
@@ -202,8 +213,8 @@ public class MSpecAnnotator implements Annotator {
 
             if (fieldTypesWithTypeRef.contains(fieldKeyword)) {
                 // This is a type reference - validate it exists
-                // Skip primitive types
-                if (!PRIMITIVE_TYPES.contains(text.toLowerCase())) {
+                // Skip primitive types (only lowercase variants are primitive types)
+                if (!PRIMITIVE_TYPES.contains(text)) {
                     Set<String> customTypes = findCustomTypes(file);
                     if (!customTypes.contains(text)) {
                         holder.newAnnotation(HighlightSeverity.ERROR,
