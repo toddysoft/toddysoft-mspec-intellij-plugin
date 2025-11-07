@@ -12,8 +12,8 @@ repositories {
 }
 
 dependencies {
-    antlr("org.antlr:antlr4:4.13.1")
-    implementation("org.antlr:antlr4-runtime:4.13.1")
+    antlr("org.antlr:antlr4:4.13.2")
+    implementation("org.antlr:antlr4-runtime:4.13.2")
 }
 
 java {
@@ -44,6 +44,26 @@ tasks.withType<AntlrTask>().configureEach {
         "-visitor",
         "-package", "com.toddysoft.mspec.parser"
     )
+
+    // Post-process generated files to suppress deprecation warnings
+    doLast {
+        val generatedDir = layout.buildDirectory.dir("generated-src/antlr/main").get().asFile
+        generatedDir.walkTopDown()
+            .filter { it.extension == "java" }
+            .forEach { file ->
+                val content = file.readText()
+
+                // Add @SuppressWarnings to getTokenNames() overrides
+                val updatedContent = content.replace(
+                    Regex("""(\t)@Override\s+@Deprecated\s+public String\[\] getTokenNames\(\)""", RegexOption.MULTILINE),
+                    "$1@Override\n$1@Deprecated\n$1@SuppressWarnings(\"deprecation\")\n$1public String[] getTokenNames()"
+                )
+
+                if (content != updatedContent) {
+                    file.writeText(updatedContent)
+                }
+            }
+    }
 }
 
 sourceSets {
