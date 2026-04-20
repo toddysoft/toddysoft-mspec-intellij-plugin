@@ -23,7 +23,17 @@
       "Bash(pkill:*)",
       "Bash(cp:*)",
       "Bash(rm:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(./gradlew --version)",
+      "Bash(gradle --version)",
+      "Bash(git checkout *)",
+      "Bash(./gradlew buildPlugin --no-configuration-cache)",
+      "Bash(./gradlew verifyPlugin --no-configuration-cache)",
+      "Bash(hdiutil attach *)",
+      "Bash(echo \"---exit $?\")",
+      "Bash(hdiutil detach *)",
+      "Bash(mount)",
+      "Bash(./gradlew buildPlugin --no-configuration-cache --no-daemon)"
     ],
     "deny": [],
     "ask": []
