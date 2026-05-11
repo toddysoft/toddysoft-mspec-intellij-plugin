@@ -7,11 +7,9 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.util.ProcessingContext;
 import com.toddysoft.mspec.psi.MSpecFile;
-import com.toddysoft.mspec.util.MSpecPackageUtil;
+import com.toddysoft.mspec.util.MSpecTypeIndex;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -82,10 +80,6 @@ public class MSpecCompletionContributor extends CompletionContributor {
         "length",
         "terminated"
     };
-
-    // Pattern to find type definitions: [type TypeName, [enum TypeName, [dataIo TypeName, [discriminatedType TypeName
-    private static final Pattern TYPE_DEFINITION_PATTERN =
-        Pattern.compile("\\[\\s*(?:type|enum|dataIo|discriminatedType)\\s+([A-Z][a-zA-Z0-9_]*)");
 
     public MSpecCompletionContributor() {
         // Provide completion for all MSpec files
@@ -255,8 +249,8 @@ public class MSpecCompletionContributor extends CompletionContributor {
                     .withBoldness(true));
         }
 
-        // Add custom types found in the file
-        Set<String> customTypes = findCustomTypes(file);
+        // Add custom types found in the file (cached scope-wide lookup)
+        Set<String> customTypes = MSpecTypeIndex.getTypesInScope(file);
         for (String customType : customTypes) {
             result.addElement(LookupElementBuilder.create(customType)
                     .withTypeText("custom type")
@@ -272,39 +266,6 @@ public class MSpecCompletionContributor extends CompletionContributor {
             result.addElement(LookupElementBuilder.create(loopType)
                     .withTypeText("array loop type")
                     .withBoldness(true));
-        }
-    }
-
-    /**
-     * Scans the current file and related files for custom type definitions.
-     * Finds: [type Name, [enum Name, [dataIo Name, [discriminatedType Name
-     * Related files include same directory and same package across source roots.
-     */
-    private Set<String> findCustomTypes(PsiFile file) {
-        Set<String> types = new HashSet<>();
-
-        // Extract types from the current file
-        extractTypesFromFile(file, types);
-
-        // Extract types from related files (same directory and same package across source roots)
-        List<PsiFile> relatedFiles = MSpecPackageUtil.findRelatedMSpecFiles(file);
-        for (PsiFile relatedFile : relatedFiles) {
-            extractTypesFromFile(relatedFile, types);
-        }
-
-        return types;
-    }
-
-    /**
-     * Extracts type definitions from a single file.
-     */
-    private void extractTypesFromFile(PsiFile file, Set<String> types) {
-        String fileText = file.getText();
-
-        Matcher matcher = TYPE_DEFINITION_PATTERN.matcher(fileText);
-        while (matcher.find()) {
-            String typeName = matcher.group(1);
-            types.add(typeName);
         }
     }
 

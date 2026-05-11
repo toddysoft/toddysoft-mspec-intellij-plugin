@@ -8,7 +8,8 @@ import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import com.toddysoft.mspec.util.MSpecPackageUtil;
+import com.intellij.psi.tree.IElementType;
+import com.toddysoft.mspec.util.MSpecTypeIndex;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -38,30 +39,48 @@ public class MSpecAnnotator implements Annotator {
         "int", "uint", "float", "ufloat", "string"
     ));
 
-    // Pattern to find type definitions
-    private static final Pattern TYPE_DEFINITION_PATTERN =
-        Pattern.compile("\\[\\s*(?:type|dataIo|discriminatedType)\\s+([A-Za-z][A-Za-z0-9_-]*)");
-    // Pattern matches enum definitions with optional base type following ANTLR dataType grammar:
-    // [enum Name] - no type
-    // [enum bit Name], [enum byte Name], [enum vint Name], etc. - types without size
-    // [enum int 8 Name], [enum uint 16 Name], etc. - types with required size
-    private static final Pattern ENUM_DEFINITION_PATTERN =
-        Pattern.compile("\\[\\s*enum\\s+(?:(?:(?:bit|byte|vint|vuint|time|date|dateTime|vstring)\\s+)|(?:(?:int|uint|float|ufloat|string)\\s+\\d+\\s+))?([A-Za-z][A-Za-z0-9_-]*)");
+    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[A-Za-z][A-Za-z0-9_-]*");
+
+    // Field types that expect a TYPE reference (not field reference).
+    private static final Set<String> FIELD_TYPES_WITH_TYPE_REF = new HashSet<>(Arrays.asList(
+            "abstract", "array", "assert", "const", "discriminator",
+            "enum", "implicit", "manualArray", "manual", "optional",
+            "peek", "simple", "virtual"
+    ));
+
+    private static final Pattern ARRAY_LOOP_CONTEXT_PATTERN =
+            Pattern.compile("[\\s\\S]*\\[\\s*(?:array|manualArray)\\s+\\S+\\s+\\S+\\s+[\\s\\S]*");
+    private static final Pattern SIZED_FIELD_NAME_CONTEXT_PATTERN =
+            Pattern.compile(".*\\[\\s*\\w+\\s+\\w+\\s+\\d+\\s+$");
+    private static final Pattern FIELD_AFTER_CUSTOM_TYPE_PATTERN =
+            Pattern.compile("\\[\\s*(\\w+)\\s+(\\w+)\\s+$");
+    private static final Pattern ARRAY_BYTE_FIELD_NAME_CONTEXT_PATTERN =
+            Pattern.compile(".*\\[\\s*array\\s+byte\\s+$");
+    private static final Pattern CASE_NAME_CONTEXT_PATTERN =
+            Pattern.compile(".*\\[\\s*'[^']*'\\s+$");
+    private static final Pattern TYPE_REF_CONTEXT_PATTERN =
+            Pattern.compile("\\[\\s*(\\w+)\\s+$");
 
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
-        // Only process leaf elements that are identifiers
+        // Only process leaf elements that are identifier-like tokens. Filter by token type first
+        // (cheap) so we skip whitespace, brackets, comments, strings, numbers, and operators
+        // without ever calling getText() or running regex on them.
         if (element.getChildren().length > 0) {
+            return;
+        }
+        IElementType type = element.getNode().getElementType();
+        if (type != MSpecTokenTypes.IDENTIFIER && type != MSpecTokenTypes.KEYWORD) {
             return;
         }
 
         String text = element.getText();
-        if (text == null || text.trim().isEmpty()) {
+        if (text == null || text.isEmpty()) {
             return;
         }
 
-        // Skip if it's not an identifier-like token
-        if (!text.matches("[A-Za-z][A-Za-z0-9_-]*")) {
+        // Sanity check: must look like an identifier.
+        if (!IDENTIFIER_PATTERN.matcher(text).matches()) {
             return;
         }
 
@@ -98,7 +117,7 @@ public class MSpecAnnotator implements Annotator {
             // Check if it's in the loop type position
             // Match: [array/manualArray typeRef fieldName whitespace (but don't require end of string)
             // Use [\\s\\S]* instead of .* to match newlines as well
-            if (beforeContext.matches("[\\s\\S]*\\[\\s*(?:array|manualArray)\\s+\\S+\\s+\\S+\\s+[\\s\\S]*")) {
+            if (ARRAY_LOOP_CONTEXT_PATTERN.matcher(beforeContext).matches()) {
                 // This is a loop type keyword in the correct position
                 // Get the keyword text attributes from the current color scheme
                 TextAttributes keywordAttrs = EditorColorsManager.getInstance().getGlobalScheme()
@@ -119,7 +138,7 @@ public class MSpecAnnotator implements Annotator {
         // Pattern: [fieldType primitiveType size fieldName
         // E.g., [simple uint 8 messageType]
         // Match: word word number word$ (where word$ is our element)
-        if (beforeContext.matches(".*\\[\\s*\\w+\\s+\\w+\\s+\\d+\\s+$")) {
+        if (SIZED_FIELD_NAME_CONTEXT_PATTERN.matcher(beforeContext).matches()) {
             // This is a field name after a sized primitive type - don't validate
             return;
         }
@@ -127,7 +146,7 @@ public class MSpecAnnotator implements Annotator {
         // Pattern: [fieldType customType fieldName
         // E.g., [simple Item items]
         // Match: word word word$ (where word$ is our element, and middle word is not a primitive keyword)
-        Matcher fieldAfterCustomType = Pattern.compile("\\[\\s*(\\w+)\\s+(\\w+)\\s+$").matcher(beforeContext);
+        Matcher fieldAfterCustomType = FIELD_AFTER_CUSTOM_TYPE_PATTERN.matcher(beforeContext);
         if (fieldAfterCustomType.find()) {
             String fieldType = fieldAfterCustomType.group(1);
             String typeRef = fieldAfterCustomType.group(2);
@@ -144,7 +163,7 @@ public class MSpecAnnotator implements Annotator {
         // Pattern: [array primitiveType fieldName
         // E.g., [array byte itemData
         // For array fields with non-sized types like byte
-        if (beforeContext.matches(".*\\[\\s*array\\s+byte\\s+$")) {
+        if (ARRAY_BYTE_FIELD_NAME_CONTEXT_PATTERN.matcher(beforeContext).matches()) {
             // This is a field name after array byte - don't validate
             return;
         }
@@ -154,7 +173,7 @@ public class MSpecAnnotator implements Annotator {
         // This is a plain typeSwitch case name - don't validate as a type reference
         // Note: ['discriminatorValue' *CASENAME won't match this pattern because of the asterisk,
         // so it will fall through to type validation (which is correct, as it defines ParentType+CaseName)
-        if (beforeContext.matches(".*\\[\\s*'[^']*'\\s+$")) {
+        if (CASE_NAME_CONTEXT_PATTERN.matcher(beforeContext).matches()) {
             // Plain case name without asterisk - don't validate
             return;
         }
@@ -200,16 +219,9 @@ public class MSpecAnnotator implements Annotator {
         // Pattern: [fieldType typeReference ... where typeReference is our element
         // E.g., [simple Huiiii test]
         // Match: word word$ (where word$ is our element followed by more content)
-        Matcher typeRefPattern = Pattern.compile("\\[\\s*(\\w+)\\s+$").matcher(beforeContext);
+        Matcher typeRefPattern = TYPE_REF_CONTEXT_PATTERN.matcher(beforeContext);
         if (typeRefPattern.find()) {
             String fieldKeyword = typeRefPattern.group(1);
-
-            // Field types that expect a TYPE reference (not field reference)
-            Set<String> fieldTypesWithTypeRef = new HashSet<>(Arrays.asList(
-                "abstract", "array", "assert", "const", "discriminator",
-                "enum", "implicit", "manualArray", "manual", "optional",
-                "peek", "simple", "virtual"
-            ));
 
             // Special field types that take field references or other syntax (not type references)
             // - typeSwitch: takes discriminator field name(s)
@@ -217,20 +229,20 @@ public class MSpecAnnotator implements Annotator {
             // - checksum, padding, reserved, unknown: take data types, not custom type refs
             // - validation: takes expression
 
-            if (fieldTypesWithTypeRef.contains(fieldKeyword)) {
+            if (FIELD_TYPES_WITH_TYPE_REF.contains(fieldKeyword)) {
                 // This is a type reference - validate it exists
                 // Skip primitive types (only lowercase variants are primitive types)
                 if (!PRIMITIVE_TYPES.contains(text)) {
-                    Set<String> localTypes = findLocalTypes(file);
-                    Set<String> externalTypes = findExternalTypes(file);
+                    Set<String> localTypes = MSpecTypeIndex.getTypesInFile(file);
+                    Set<String> typesInScope = MSpecTypeIndex.getTypesInScope(file);
 
-                    if (!localTypes.contains(text) && !externalTypes.contains(text)) {
+                    if (!typesInScope.contains(text)) {
                         // Type not found anywhere - error
                         holder.newAnnotation(HighlightSeverity.ERROR,
                             "Undefined type '" + text + "'. Type must be defined with [type " + text + "], [enum " + text + "], or similar.")
                             .range(element.getTextRange())
                             .create();
-                    } else if (externalTypes.contains(text) && !localTypes.contains(text)) {
+                    } else if (!localTypes.contains(text)) {
                         // Type is external - add subtle highlighting to indicate it's from another file
                         TextAttributes externalTypeAttrs = EditorColorsManager.getInstance().getGlobalScheme()
                                 .getAttributes(com.intellij.openapi.editor.DefaultLanguageHighlighterColors.CLASS_REFERENCE);
@@ -249,95 +261,4 @@ public class MSpecAnnotator implements Annotator {
         }
     }
 
-    /**
-     * Finds type definitions only in the current file
-     */
-    private Set<String> findLocalTypes(PsiFile file) {
-        Set<String> types = new HashSet<>();
-        extractTypesFromFile(file, types);
-        return types;
-    }
-
-    /**
-     * Finds type definitions in related .mspec files (same directory and same package across source roots)
-     */
-    private Set<String> findExternalTypes(PsiFile file) {
-        Set<String> types = new HashSet<>();
-
-        // Add types from related .mspec files (same directory and same package across source roots)
-        List<PsiFile> relatedFiles = MSpecPackageUtil.findRelatedMSpecFiles(file);
-        for (PsiFile relatedFile : relatedFiles) {
-            extractTypesFromFile(relatedFile, types);
-        }
-
-        return types;
-    }
-
-    /**
-     * Finds all custom type definitions in the file and other .mspec files in the same directory
-     */
-    private Set<String> findCustomTypes(PsiFile file) {
-        Set<String> types = new HashSet<>();
-        types.addAll(findLocalTypes(file));
-        types.addAll(findExternalTypes(file));
-        return types;
-    }
-
-    /**
-     * Extracts type definitions from a single file
-     */
-    private void extractTypesFromFile(PsiFile file, Set<String> types) {
-        String fileText = file.getText();
-
-        // Find regular type definitions (type, dataIo, discriminatedType)
-        Matcher matcher = TYPE_DEFINITION_PATTERN.matcher(fileText);
-        while (matcher.find()) {
-            types.add(matcher.group(1));
-        }
-
-        // Find enum definitions
-        Matcher enumMatcher = ENUM_DEFINITION_PATTERN.matcher(fileText);
-        while (enumMatcher.find()) {
-            types.add(enumMatcher.group(1));
-        }
-
-        // Find typeSwitch case definitions with asterisk prefix
-        // Pattern: ['discriminatorValue' *CaseName inside a parent type
-        // These create subtypes like ParentType + CaseName = ParentTypeCaseName
-        Pattern asteriskCasePattern = Pattern.compile("\\[\\s*'[^']*'\\s+\\*([A-Za-z][A-Za-z0-9_-]*)");
-        Matcher asteriskMatcher = asteriskCasePattern.matcher(fileText);
-        while (asteriskMatcher.find()) {
-            String caseName = asteriskMatcher.group(1);
-            int caseOffset = asteriskMatcher.start();
-
-            // Find the parent type by searching backwards for the containing type definition
-            String parentTypeName = findParentTypeName(fileText, caseOffset);
-            if (parentTypeName != null) {
-                // Combine parent type name + case name
-                String fullTypeName = parentTypeName + caseName;
-                types.add(fullTypeName);
-            }
-        }
-    }
-
-    /**
-     * Finds the parent type name for a typeSwitch case at the given offset.
-     * Searches backwards from the offset to find the containing [type Name] or [discriminatedType Name].
-     */
-    private String findParentTypeName(String fileText, int offset) {
-        // Search backwards for the type definition
-        String beforeText = fileText.substring(0, offset);
-
-        // Pattern to find [type Name] or [discriminatedType Name]
-        // We want the LAST match before our offset (closest parent)
-        Pattern parentTypePattern = Pattern.compile("\\[\\s*(?:type|discriminatedType|dataIo)\\s+([A-Za-z][A-Za-z0-9_-]*)");
-        Matcher matcher = parentTypePattern.matcher(beforeText);
-
-        String lastMatch = null;
-        while (matcher.find()) {
-            lastMatch = matcher.group(1);
-        }
-
-        return lastMatch;
-    }
 }

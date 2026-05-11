@@ -4,13 +4,12 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
-import com.toddysoft.mspec.util.MSpecPackageUtil;
+import com.toddysoft.mspec.util.MSpecTypeIndex;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,18 +17,24 @@ import java.util.regex.Pattern;
 /**
  * Handles "Go to Definition" for type references in MSpec files.
  * Uses GotoDeclarationHandler which works better with ANTLR's flat PSI structure.
+ *
+ * Type lookups are delegated to {@link MSpecTypeIndex}, which caches per-file type-offset maps.
  */
 public class MSpecGotoDeclarationHandler implements GotoDeclarationHandler {
 
-    private static final Pattern TYPE_DEFINITION_PATTERN =
-            Pattern.compile("\\[\\s*(?:type|dataIo|discriminatedType)\\s+([A-Za-z][A-Za-z0-9_-]*)");
-    private static final Pattern ENUM_DEFINITION_PATTERN =
-            Pattern.compile("\\[\\s*enum\\s+(?:(?:(?:bit|byte|vint|vuint|time|date|dateTime|vstring)\\s+)|(?:(?:int|uint|float|ufloat|string)\\s+\\d+\\s+))?([A-Za-z][A-Za-z0-9_-]*)");
+    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[A-Za-z][A-Za-z0-9_-]*");
+    private static final Pattern TYPE_REF_CONTEXT_PATTERN = Pattern.compile("\\[\\s*(\\w+)\\s+$");
 
     private static final Set<String> PRIMITIVE_TYPES = new HashSet<>(Arrays.asList(
             "bit", "byte", "int", "uint", "vint", "vuint",
             "float", "ufloat", "string", "vstring",
             "time", "date", "dateTime"
+    ));
+
+    private static final Set<String> FIELD_TYPES_WITH_TYPE_REF = new HashSet<>(Arrays.asList(
+            "abstract", "array", "assert", "const", "discriminator",
+            "enum", "implicit", "manualArray", "manual", "optional",
+            "peek", "simple", "virtual"
     ));
 
     @Override
@@ -40,49 +45,34 @@ public class MSpecGotoDeclarationHandler implements GotoDeclarationHandler {
             return null;
         }
 
-        // Only handle MSpec files
         PsiFile file = sourceElement.getContainingFile();
         if (file == null || !file.getName().endsWith(".mspec")) {
             return null;
         }
 
-        // Get the identifier text
         String text = sourceElement.getText();
-        if (text == null || text.trim().isEmpty()) {
+        if (text == null || text.isEmpty()) {
             return null;
         }
 
-        // Must be identifier-like
-        if (!text.matches("[A-Za-z][A-Za-z0-9_-]*")) {
+        if (!IDENTIFIER_PATTERN.matcher(text).matches()) {
             return null;
         }
 
-        // Skip primitive types
         if (PRIMITIVE_TYPES.contains(text)) {
             return null;
         }
 
-        // Check if this looks like a type reference (not a definition or field name)
         if (!isTypeReference(sourceElement)) {
             return null;
         }
 
-        // Search for the type definition in the current file
-        PsiElement definition = findTypeDefinition(file, text);
-        if (definition != null) {
-            return new PsiElement[]{definition};
+        MSpecTypeIndex.TypeLocation location = MSpecTypeIndex.findTypeDefinition(file, text);
+        if (location == null) {
+            return null;
         }
-
-        // Search in related .mspec files (same directory and same package across source roots)
-        List<PsiFile> relatedFiles = MSpecPackageUtil.findRelatedMSpecFiles(file);
-        for (PsiFile relatedFile : relatedFiles) {
-            definition = findTypeDefinition(relatedFile, text);
-            if (definition != null) {
-                return new PsiElement[]{definition};
-            }
-        }
-
-        return null;
+        PsiElement target = location.file.findElementAt(location.offset);
+        return target != null ? new PsiElement[]{target} : null;
     }
 
     /**
@@ -97,91 +87,14 @@ public class MSpecGotoDeclarationHandler implements GotoDeclarationHandler {
         int offset = element.getTextRange().getStartOffset();
         String fileText = file.getText();
 
-        // Get context before this element
         int contextStart = Math.max(0, offset - 100);
         String beforeContext = fileText.substring(contextStart, offset);
 
-        // Pattern: [fieldType typeReference ... where typeReference is our element
-        // E.g., [simple CustomType test]
-        Matcher typeRefPattern = Pattern.compile("\\[\\s*(\\w+)\\s+$").matcher(beforeContext);
+        Matcher typeRefPattern = TYPE_REF_CONTEXT_PATTERN.matcher(beforeContext);
         if (typeRefPattern.find()) {
-            String fieldKeyword = typeRefPattern.group(1);
-
-            // Field types that expect a TYPE reference (not field reference)
-            Set<String> fieldTypesWithTypeRef = new HashSet<>(Arrays.asList(
-                    "abstract", "array", "assert", "const", "discriminator",
-                    "enum", "implicit", "manualArray", "manual", "optional",
-                    "peek", "simple", "virtual"
-            ));
-
-            return fieldTypesWithTypeRef.contains(fieldKeyword);
+            return FIELD_TYPES_WITH_TYPE_REF.contains(typeRefPattern.group(1));
         }
 
         return false;
-    }
-
-    /**
-     * Finds a type definition in the given file.
-     */
-    private @Nullable PsiElement findTypeDefinition(PsiFile file, String typeName) {
-        String fileText = file.getText();
-
-        // Search for type definitions (type, dataIo, discriminatedType)
-        Matcher matcher = TYPE_DEFINITION_PATTERN.matcher(fileText);
-        while (matcher.find()) {
-            if (typeName.equals(matcher.group(1))) {
-                int startOffset = matcher.start(1);
-                return file.findElementAt(startOffset);
-            }
-        }
-
-        // Search for enum definitions
-        Matcher enumMatcher = ENUM_DEFINITION_PATTERN.matcher(fileText);
-        while (enumMatcher.find()) {
-            if (typeName.equals(enumMatcher.group(1))) {
-                int startOffset = enumMatcher.start(1);
-                return file.findElementAt(startOffset);
-            }
-        }
-
-        // Search for typeSwitch case definitions with asterisk prefix
-        // Pattern: ['discriminatorValue' *CaseName creates ParentTypeCaseName
-        Pattern asteriskCasePattern = Pattern.compile("\\[\\s*'[^']*'\\s+\\*([A-Za-z][A-Za-z0-9_-]*)");
-        Matcher asteriskMatcher = asteriskCasePattern.matcher(fileText);
-        while (asteriskMatcher.find()) {
-            String caseName = asteriskMatcher.group(1);
-            int caseOffset = asteriskMatcher.start();
-
-            // Find the parent type name
-            String parentTypeName = findParentTypeName(fileText, caseOffset);
-            if (parentTypeName != null) {
-                String fullTypeName = parentTypeName + caseName;
-                if (typeName.equals(fullTypeName)) {
-                    // Navigate to the case name (after the asterisk)
-                    int startOffset = asteriskMatcher.start(1);
-                    return file.findElementAt(startOffset);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Finds the parent type name for a typeSwitch case at the given offset.
-     */
-    private String findParentTypeName(String fileText, int offset) {
-        String beforeText = fileText.substring(0, offset);
-
-        // Pattern to find [type Name] or [discriminatedType Name]
-        Pattern parentTypePattern = Pattern.compile("\\[\\s*(?:type|discriminatedType|dataIo)\\s+([A-Za-z][A-Za-z0-9_-]*)");
-        Matcher matcher = parentTypePattern.matcher(beforeText);
-
-        String lastMatch = null;
-        while (matcher.find()) {
-            lastMatch = matcher.group(1);
-        }
-
-        return lastMatch;
     }
 }

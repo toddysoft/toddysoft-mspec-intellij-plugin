@@ -46,6 +46,8 @@ intellijPlatform {
 
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+    options.compilerArgs.add("-Xlint:deprecation")
+    options.isDeprecation = true
 }
 
 tasks.named("compileJava") {
@@ -62,20 +64,36 @@ tasks.withType<AntlrTask>().configureEach {
         "-package", "com.toddysoft.mspec.parser"
     )
 
-    // Post-process generated files to suppress deprecation warnings
+    // Post-process generated files to neutralize the deprecated getTokenNames() overrides flagged
+    // by the IntelliJ Plugin Verifier. Two cases:
+    //   - In Lexer subclasses: Lexer.getTokenNames() is concrete in the ANTLR runtime, so we can
+    //     drop the override entirely and inherit the default. Verifier finding goes away.
+    //   - In Parser subclasses: Recognizer.getTokenNames() is abstract, so the override is
+    //     mandatory; we can only add @SuppressWarnings to silence javac. The plugin verifier will
+    //     still flag these two cases — that is inherent to using the ANTLR 4 runtime.
     doLast {
+        val overrideBlock = Regex(
+            """\t@Override\s+@Deprecated\s+(?:@SuppressWarnings\([^)]*\)\s+)?public String\[\] getTokenNames\(\)\s*\{[^}]*\}\s*""",
+            RegexOption.MULTILINE
+        )
+        val parserAnnotated = Regex(
+            """(\t)@Override\s+@Deprecated\s+public String\[\] getTokenNames\(\)""",
+            RegexOption.MULTILINE
+        )
         val generatedDir = layout.buildDirectory.dir("generated-src/antlr/main").get().asFile
         generatedDir.walkTopDown()
             .filter { it.extension == "java" }
             .forEach { file ->
                 val content = file.readText()
-
-                // Add @SuppressWarnings to getTokenNames() overrides
-                val updatedContent = content.replace(
-                    Regex("""(\t)@Override\s+@Deprecated\s+public String\[\] getTokenNames\(\)""", RegexOption.MULTILINE),
-                    "$1@Override\n$1@Deprecated\n$1@SuppressWarnings(\"deprecation\")\n$1public String[] getTokenNames()"
-                )
-
+                val isLexer = content.contains("extends Lexer")
+                val updatedContent = if (isLexer) {
+                    content.replace(overrideBlock, "")
+                } else {
+                    content.replace(
+                        parserAnnotated,
+                        "$1@Override\n$1@Deprecated\n$1@SuppressWarnings(\"deprecation\")\n$1public String[] getTokenNames()"
+                    )
+                }
                 if (content != updatedContent) {
                     file.writeText(updatedContent)
                 }

@@ -33,7 +33,12 @@
       "Bash(echo \"---exit $?\")",
       "Bash(hdiutil detach *)",
       "Bash(mount)",
-      "Bash(./gradlew buildPlugin --no-configuration-cache --no-daemon)"
+      "Bash(./gradlew buildPlugin --no-configuration-cache --no-daemon)",
+      "Bash(./gradlew verifyPlugin)",
+      "Bash(javap -p org/antlr/v4/runtime/Parser.class)",
+      "Bash(javap -p org/antlr/v4/runtime/Lexer.class)",
+      "Bash(xargs -I{} sh -c 'echo \"{}:\"; grep -c \"getTokenNames\" \"{}\" || echo 0')",
+      "Bash(xargs -I{} sh -c 'echo \"{}:\"; grep -c \"getTokenNames\" \"{}\"')"
     ],
     "deny": [],
     "ask": []
