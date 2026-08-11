@@ -38,7 +38,20 @@
       "Bash(javap -p org/antlr/v4/runtime/Parser.class)",
       "Bash(javap -p org/antlr/v4/runtime/Lexer.class)",
       "Bash(xargs -I{} sh -c 'echo \"{}:\"; grep -c \"getTokenNames\" \"{}\" || echo 0')",
-      "Bash(xargs -I{} sh -c 'echo \"{}:\"; grep -c \"getTokenNames\" \"{}\"')"
+      "Bash(xargs -I{} sh -c 'echo \"{}:\"; grep -c \"getTokenNames\" \"{}\"')",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import json,sys;print\\(json.load\\(sys.stdin\\)['version']\\)\")",
+      "Bash(sed -i '' 's/^pluginUntilBuild = 261\\\\.\\\\*/pluginUntilBuild = 262.*/' gradle.properties)",
+      "Bash(sed -i '' 's/id\\(\"org.jetbrains.intellij.platform\"\\) version \"2.14.0\"/id\\(\"org.jetbrains.intellij.platform\"\\) version \"2.18.1\"/' build.gradle.kts)",
+      "Bash(./gradlew buildPlugin --console=plain)",
+      "Bash(./gradlew verifyPlugin --console=plain)",
+      "Bash(unzip -l /Users/christoferdutz/.gradle/caches/modules-2/files-2.1/org.jetbrains.intellij.platform/intellij-platform-gradle-plugin/2.18.1/33e1dc27b897b5b2491c9a85a2980a38b4f69c7c/intellij-platform-gradle-plugin-2.18.1.jar)",
+      "Bash(unzip -o -q /Users/christoferdutz/.gradle/caches/modules-2/files-2.1/org.jetbrains.intellij.platform/intellij-platform-gradle-plugin/2.18.1/33e1dc27b897b5b2491c9a85a2980a38b4f69c7c/intellij-platform-gradle-plugin-2.18.1.jar 'org/jetbrains/intellij/platform/gradle/extensions/IntelliJPlatformExtension$PluginVerification$Ides.class')",
+      "Bash(javap 'org/jetbrains/intellij/platform/gradle/extensions/IntelliJPlatformExtension$PluginVerification$Ides.class')",
+      "Bash(unzip -o -q /Users/christoferdutz/.gradle/caches/modules-2/files-2.1/org.jetbrains.intellij.platform/intellij-platform-gradle-plugin/2.18.1/33e1dc27b897b5b2491c9a85a2980a38b4f69c7c/intellij-platform-gradle-plugin-2.18.1.jar org/jetbrains/intellij/platform/gradle/IntelliJPlatformType.class)",
+      "Bash(javap 'org/jetbrains/intellij/platform/gradle/IntelliJPlatformType.class')",
+      "Bash(sed -i '' 's|gradle-9\\\\.1\\\\.0-bin\\\\.zip|gradle-9.7.0-bin.zip|' gradle/wrapper/gradle-wrapper.properties)",
+      "Bash(sed -i '' 's/^gradleVersion = 9\\\\.1\\\\.0/gradleVersion = 9.7.0/' gradle.properties)"
     ],
     "deny": [],
     "ask": []

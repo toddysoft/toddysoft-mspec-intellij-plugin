@@ -1,6 +1,8 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+
 plugins {
     java
-    id("org.jetbrains.intellij.platform") version "2.14.0"
+    id("org.jetbrains.intellij.platform") version "2.18.1"
     antlr
 }
 
@@ -39,7 +41,15 @@ intellijPlatform {
 
     pluginVerification {
         ides {
+            // "recommended()" only covers the IDEs JetBrains publishes as recommended, which lags
+            // behind the current releases, so the newest platforms in our compatibility range are
+            // listed explicitly.
             recommended()
+            // Note: since 2025.3 (253) IntelliJ IDEA Community is no longer published separately,
+            // so these use the unified "IntellijIdea" distribution rather than "IntellijIdeaCommunity".
+            create(IntelliJPlatformType.IntellijIdea, "2025.3.6.1")
+            create(IntelliJPlatformType.IntellijIdea, "2026.1.4")
+            create(IntelliJPlatformType.IntellijIdea, "2026.2.1")
         }
     }
 }

@@ -115,10 +115,10 @@ toddysoft-mspec-intellij-plugin/
 
 ## Development Notes
 
-- The plugin uses ANTLR 4.13.1 for parsing
-- IntelliJ Platform version: 2023.2.5
-- Minimum IDE build: 232
-- Maximum IDE build: 242.*
+- The plugin uses ANTLR 4.13.2 for parsing
+- IntelliJ Platform version the plugin is built against: 2024.2.5 (the oldest supported platform)
+- Minimum IDE build: 242 (2024.2)
+- Maximum IDE build: 262.* (2026.2)
 
 ## License
 
