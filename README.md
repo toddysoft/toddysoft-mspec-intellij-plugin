@@ -37,16 +37,18 @@ An IntelliJ IDEA plugin that provides language support for Apache PLC4X MSpec (M
 
 ### Prerequisites
 
-- Java 17 or higher (note: the build requires Java 17 specifically due to Gradle compatibility)
-- Gradle 8.5+ (included via wrapper)
+- Java 21 (the plugin targets Java 21, as the IntelliJ Platform requires since 2024.2)
+- Gradle 9.7 (included via wrapper)
+
+Note that `gradle.properties` pins `org.gradle.java.home` to a local JDK path; override it if your
+Java 21 install lives elsewhere.
 
 ### Build Instructions
 
 1. Clone the repository
-2. Run the build with Java 17:
+2. Run the build:
 
 ```bash
-export JAVA_HOME=/path/to/java-17
 ./gradlew build
 ```
 
@@ -57,7 +59,6 @@ The plugin will be built and packaged in `build/distributions/`.
 To run IntelliJ IDEA with the plugin for testing:
 
 ```bash
-export JAVA_HOME=/path/to/java-17
 ./gradlew runIde
 ```
 
@@ -108,6 +109,7 @@ toddysoft-mspec-intellij-plugin/
 │   └── profinet/
 ├── build.gradle.kts            # Gradle build configuration
 ├── README.md
+├── RELEASING.md                # Release and publishing procedure
 ├── QUICKSTART.md
 ├── COMPLETION.md
 └── PSI_ARCHITECTURE.md
@@ -119,6 +121,19 @@ toddysoft-mspec-intellij-plugin/
 - IntelliJ Platform version the plugin is built against: 2024.2.5 (the oldest supported platform)
 - Minimum IDE build: 242 (2024.2)
 - Maximum IDE build: 262.* (2026.2)
+
+## Publishing
+
+Releases are signed with the ToddySoft YubiKey and published to the
+[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/28936-toddysoft-mspec-language-support).
+See **[RELEASING.md](RELEASING.md)** for the full procedure, the one-time signing setup, and
+troubleshooting.
+
+```bash
+./gradlew verifyPlugin                          # must be Compatible on every supported IDE
+./gradlew verifyPluginSignature -PreleaseSigning # sign with the YubiKey and check the signature
+./gradlew publishPlugin -PreleaseSigning         # upload to the Marketplace
+```
 
 ## License
 
